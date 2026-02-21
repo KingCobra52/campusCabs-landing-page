@@ -27,38 +27,43 @@
 
 import Image from "next/image";
 import { useRef, useState } from 'react';
+import { useForm } from 'react-hook-form'; 
 
 type WaitlistRole = "rider" | "driver"; 
 
-interface WaitlistPayload {
+interface WaitlistFormValues {
   role: WaitlistRole;
   name: string; 
   email: string;
   phone: string; 
 }
 
+const inputClasses = "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100";
+const inputErrorClasses = "w-full rounded-lg border-2 border-red-500 bg-white px-3 py-2 text-zinc-900 dark:border-red-500 dark:bg-zinc-800 dark:text-zinc-100";
+
 
 export default function Home() {
   const waitlistRef = useRef<HTMLDivElement>(null); //points at the join waitlist section 
-  const [role, setRole] = useState<WaitlistRole>("rider");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
+  const {
+    register, 
+    handleSubmit: rhfHandleSubmit, 
+    formState: { errors }, 
+  } = useForm<WaitlistFormValues>({
+    defaultValues: {role: "rider", name: "", email: "", phone: ""}
+  });
+
   //call this function when button press to scroll to join waitlist section (button to join waitlist)
-  const scrollToWaitlist = () => {
+  const scrollToWaitlist = (): void => {
     //only runs if not currently at the join waitlist section 
     waitlistRef.current?.scrollIntoView({ behavior: "smooth"})
   }; 
 
-
-  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const payload: WaitlistPayload = { role, name, email, phone };
-    //Ready for later supabase: payload 
-    console.log("Waitlist payload", payload)
-    setSubmitted(true);
+  const onWaitlistSubmit = (data: WaitlistFormValues): void => {
+    console.log("Waitlist payload", data)
+    //send to supabase later 
+    setSubmitted(true); 
   }
 
 
@@ -66,15 +71,14 @@ export default function Home() {
     <div className="min-h-screen bg-zinc-50 font-sans dark:bg-black">
       <main className="mx-auto max-w-3xl px-6 py-16 sm:px-8">
         {/* Hero */}
-      <section className="py-16 text-center sm:py-24">
+        <section className="py-16 text-center sm:py-24">
           <h1 className="text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-5xl">
             CampusCabs
           </h1>
           <p className="mt-4 max-w-xl mx-auto text-lg text-zinc-600 dark:text-zinc-400">
-          State College rides, done right.
+            State College rides, done right.
           </p>
         </section>
-        {/* End Hero */}
 
         {/* Problem */}
         <section className="py-12" aria-labelledby="problem-heading">
@@ -88,10 +92,8 @@ export default function Home() {
             <li>Riders end up paying more</li>
           </ul>
         </section>
-         {/* End Problem */}
 
-
-         {/* Solution */}
+        {/* Solution */}
         <section className="py-12" aria-labelledby="solution-heading">
           <h2 id="solution-heading" className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
             The solution
@@ -103,7 +105,6 @@ export default function Home() {
             <li>Riders pay less</li>
           </ul>
         </section>
-        {/* End Solution */}
 
         {/* Main CTA — Waitlist form */}
         <section
@@ -121,8 +122,10 @@ export default function Home() {
               Thanks! We’ll be in touch soon.
             </p>
           ) : (
-            <form onSubmit={handleSubmit} className="mt-6 max-w-md space-y-4">
-              {/* Rider / Driver toggle */}
+            <form
+              onSubmit={rhfHandleSubmit(onWaitlistSubmit)}
+              className="mt-6 max-w-md space-y-4"
+            >
               <div>
                 <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
                   I am a
@@ -131,22 +134,18 @@ export default function Home() {
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
-                      name="role"
                       value="rider"
-                      checked={role === "rider"}
-                      onChange={() => setRole("rider")}
                       className="rounded-full border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                      {...register("role")}
                     />
                     <span className="text-zinc-700 dark:text-zinc-300">Rider</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
-                      name="role"
                       value="driver"
-                      checked={role === "driver"}
-                      onChange={() => setRole("driver")}
                       className="rounded-full border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                      {...register("role")}
                     />
                     <span className="text-zinc-700 dark:text-zinc-300">Driver</span>
                   </label>
@@ -154,47 +153,74 @@ export default function Home() {
               </div>
 
               <div>
-                <label htmlFor="waitlist-name" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <label
+                  htmlFor="waitlist-name"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+                >
                   Name
                 </label>
                 <input
                   id="waitlist-name"
                   type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                   placeholder="Your name"
+                  className={errors.name ? inputErrorClasses : inputClasses}
+                  {...register("name", { required: "Name is required" })}
                 />
+                {errors.name && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
+                    {errors.name.message}
+                  </p>
+                )}
               </div>
+
               <div>
-                <label htmlFor="waitlist-email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <label
+                  htmlFor="waitlist-email"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+                >
                   Email
                 </label>
                 <input
                   id="waitlist-email"
                   type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                   placeholder="you@example.com"
+                  className={errors.email ? inputErrorClasses : inputClasses}
+                  {...register("email", {
+                    required: "Email is required",
+                    pattern: {
+                      value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                      message: "Enter a valid email address",
+                    },
+                  })}
                 />
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
+
               <div>
-                <label htmlFor="waitlist-phone" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <label
+                  htmlFor="waitlist-phone"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+                >
                   Phone
                 </label>
                 <input
                   id="waitlist-phone"
                   type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                   placeholder="(555) 000-0000"
+                  className={errors.phone ? inputErrorClasses : inputClasses}
+                  {...register("phone", { required: "Phone is required" })}
                 />
+                {errors.phone && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
+                    {errors.phone.message}
+                  </p>
+                )}
               </div>
+
               <button
                 type="submit"
                 className="w-full rounded-full bg-zinc-900 px-5 py-3 font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
@@ -204,10 +230,9 @@ export default function Home() {
             </form>
           )}
         </section>
-        {/* End Main CTA — Waitlist form */}
 
-         {/* Bottom CTA — outline style so it’s distinct from the main form submit */}
-         <section className="py-16 text-center">
+        {/* Bottom CTA */}
+        <section className="py-16 text-center">
           <button
             type="button"
             onClick={scrollToWaitlist}
@@ -216,8 +241,6 @@ export default function Home() {
             Join the waitlist
           </button>
         </section>
-        {/* End Bottom CTA */}
-
       </main>
     </div>
   );
