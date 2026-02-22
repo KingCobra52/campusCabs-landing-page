@@ -14,11 +14,15 @@ import {
   Instagram,
 } from "lucide-react";
 
+import { supabase } from '../lib/supabaseClient'; 
+
 /* ── Types ── */
+
+type FormStatus = "idle" | "loading" | "success" | "error" | "duplicate";
 
 interface WaitlistFormValues {
   name: string;
-  email: string;
+  phone: string;
 }
 
 interface RiderFormValues {
@@ -39,7 +43,7 @@ const RIDER_BENEFITS = [
 ] as const;
 
 const DRIVER_BENEFITS = [
-  "Keep 100% of your fare during the pilot — no commission taken",
+  "Keep 100% of your fare during the pilot",
   "Drive on your own schedule",
   "24/7 driver assistance guaranteed",
 ] as const;
@@ -70,8 +74,9 @@ const inputError = `${inputBase} border-red-400 bg-off-white focus:border-red-50
 
 export default function Home(): React.JSX.Element {
   const waitlistRef = useRef<HTMLDivElement>(null);
-  const [riderSubmitted, setRiderSubmitted] = useState(false);
-  const [driverSubmitted, setDriverSubmitted] = useState(false);
+  const [riderStatus, setRiderStatus] = useState<FormStatus>("idle");
+  const [driverStatus, setDriverStatus] = useState<FormStatus>("idle"); 
+
 
   const riderForm = useForm<RiderFormValues>({
     defaultValues: {
@@ -86,38 +91,54 @@ export default function Home(): React.JSX.Element {
   const isPsuStudent = riderForm.watch("is_psu_student");
 
   const driverForm = useForm<WaitlistFormValues>({
-    defaultValues: { name: "", email: "" },
+    defaultValues: { name: "", phone: "" },
   });
 
   const scrollToWaitlist = (): void => {
     waitlistRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const onRiderSubmit = (data: RiderFormValues): void => {
+  const onRiderSubmit = async (data: RiderFormValues): Promise<void> => {
+    setRiderStatus("loading");
+
+    //conditional based on psu student 
     const payload = data.is_psu_student
-      ? {
-          role: "rider" as const,
-          name: data.name,
-          is_psu_student: true,
-          psu_email: data.psu_email,
-          instagram: data.instagram || undefined,
-        }
-      : {
-          role: "rider" as const,
-          name: data.name,
-          is_psu_student: false,
-          email: data.email,
-        };
-    // Ready for Supabase
-    console.log("Rider waitlist payload", payload);
-    setRiderSubmitted(true);
+    ? {
+        name: data.name,
+        is_psu_student: true,
+        psu_email: data.psu_email,
+        instagram: data.instagram || null,
+      }
+    : {
+        name: data.name,
+        is_psu_student: false,
+        email: data.email,
+      };
+
+      const { error } = await supabase.from("waitlist_riders").insert([payload]);
+
+      if (error) {
+        setRiderStatus(error.code == '23505' ? "duplicate": "error");
+        return;
+      }
+      
+    setRiderStatus("success"); 
   };
 
-  const onDriverSubmit = (data: WaitlistFormValues): void => {
-    // Ready for Supabase: { role: "driver", ...data }
-    console.log("Driver waitlist payload", { role: "driver", ...data });
-    setDriverSubmitted(true);
-  };
+  const onDriverSubmit = async (data: WaitlistFormValues): Promise<void> => {
+    setDriverStatus("loading");
+
+    const { error } = await supabase
+      .from("waitlist_drivers")
+      .insert([{ name: data.name, phone: data.phone }]);
+
+      if (error) {
+        setDriverStatus(error.code == '23505' ? 'duplicate': 'error');
+        return;
+      }
+
+      setDriverStatus('success');
+  }
 
   /* Scroll reveal via IntersectionObserver */
   useEffect(() => {
@@ -226,7 +247,7 @@ export default function Home(): React.JSX.Element {
                 Get campus rides at honest prices, no surprises.
               </p>
 
-              {riderSubmitted ? (
+              {riderStatus === "success" ? (
                 <div className="flex flex-col items-center gap-2 rounded-xl bg-green-50 py-6 text-center">
                   <CheckCircle2 className="h-7 w-7 text-green-600" />
                   <p className="font-[family-name:var(--font-sora)] text-sm font-semibold text-green-700">
@@ -338,10 +359,22 @@ export default function Home(): React.JSX.Element {
 
                   <button
                     type="submit"
-                    className="w-full rounded-[10px] bg-blue px-4 py-3 font-[family-name:var(--font-sora)] text-[0.9rem] font-semibold text-white transition-all hover:bg-[#1558d0] hover:-translate-y-px"
+                    disabled={riderStatus === "loading"}
+                    className="w-full rounded-[10px] bg-blue px-4 py-3 font-[family-name:var(--font-sora)] text-[0.9rem] font-semibold text-white transition-all hover:bg-[#1558d0] hover:-translate-y-px disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Join as Rider →
+                    {riderStatus === "loading" ? "Submitting…" : "Join as Rider →"}
                   </button>
+
+                  {riderStatus === "error" && (
+                    <p className="text-center text-xs text-red-600" role="alert">
+                      Something went wrong. Please try again.
+                    </p>
+                  )}
+                  {riderStatus === "duplicate" && (
+                    <p className="text-center text-xs text-amber-600" role="alert">
+                      Looks like you&apos;re already on the list!
+                    </p>
+                  )}
                 </form>
               )}
             </div>
@@ -359,7 +392,7 @@ export default function Home(): React.JSX.Element {
                 schedule.
               </p>
 
-              {driverSubmitted ? (
+              {driverStatus === "success" ? (
                 <div className="flex flex-col items-center gap-2 rounded-xl bg-green-50 py-6 text-center">
                   <CheckCircle2 className="h-7 w-7 text-green-600" />
                   <p className="font-[family-name:var(--font-sora)] text-sm font-semibold text-green-700">
@@ -384,29 +417,41 @@ export default function Home(): React.JSX.Element {
                     </p>
                   )}
                   <input
-                    type="email"
-                    placeholder="Your email"
-                    aria-label="Driver email"
-                    className={driverForm.formState.errors.email ? inputError : inputNormal}
-                    {...driverForm.register("email", {
-                      required: "Email is required",
+                    type="tel"
+                    placeholder="Your phone number"
+                    aria-label="Driver phone number"
+                    className={driverForm.formState.errors.phone ? inputError : inputNormal}
+                    {...driverForm.register("phone", {
+                      required: "Phone number is required",
                       pattern: {
-                        value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                        message: "Enter a valid email",
+                        value: /^\+?[1-9]\d{9,14}$/,
+                        message: "Enter a valid phone number",
                       },
                     })}
                   />
-                  {driverForm.formState.errors.email && (
+                  {driverForm.formState.errors.phone && (
                     <p className="text-xs text-red-600" role="alert">
-                      {driverForm.formState.errors.email.message}
+                      {driverForm.formState.errors.phone.message}
                     </p>
                   )}
                   <button
                     type="submit"
-                    className="w-full rounded-[10px] bg-navy px-4 py-3 font-[family-name:var(--font-sora)] text-[0.9rem] font-semibold text-white transition-all hover:bg-blue hover:-translate-y-px"
+                    disabled={driverStatus === "loading"}
+                    className="w-full rounded-[10px] bg-navy px-4 py-3 font-[family-name:var(--font-sora)] text-[0.9rem] font-semibold text-white transition-all hover:bg-blue hover:-translate-y-px disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Join as Driver →
+                    {driverStatus === "loading" ? "Submitting…" : "Join as Driver →"}
                   </button>
+
+                  {driverStatus === "error" && (
+                    <p className="text-center text-xs text-red-600" role="alert">
+                      Something went wrong. Please try again.
+                    </p>
+                  )}
+                  {driverStatus === "duplicate" && (
+                    <p className="text-center text-xs text-amber-600" role="alert">
+                      Looks like you&apos;re already on the list!
+                    </p>
+                  )}
                 </form>
               )}
             </div>
@@ -458,7 +503,7 @@ export default function Home(): React.JSX.Element {
         {/* ─── For Riders / For Drivers ─── */}
         <section className="bg-white px-6 py-24 sm:py-28">
           <p className="reveal text-center font-[family-name:var(--font-sora)] text-[0.78rem] font-semibold uppercase tracking-[1.5px] text-blue">
-            Built for everyone on campus
+            Built for State College
           </p>
           <h2 className="reveal mt-4 mb-16 text-center font-[family-name:var(--font-sora)] text-[clamp(1.8rem,4vw,2.6rem)] font-extrabold tracking-[-1px] text-navy">
             Better for riders. Better for drivers.
@@ -540,7 +585,7 @@ export default function Home(): React.JSX.Element {
           </div>
           <p className="text-[0.83rem] text-white/40">
             &copy; {new Date().getFullYear()} CampusCabs · Penn State · Built
-            by students, for students
+            by Arnav Aggarwal & Siddarth Thota 
           </p>
         </footer>
       </main>
