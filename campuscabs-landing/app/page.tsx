@@ -45,7 +45,6 @@ const RIDER_BENEFITS = [
 const DRIVER_BENEFITS = [
   "Keep 100% of your fare during the pilot",
   "Drive on your own schedule",
-  "24/7 driver assistance guaranteed",
 ] as const;
 
 const STATS = [
