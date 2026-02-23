@@ -1,0 +1,8 @@
+# Cursor IDE files
+.cursor/
+
+# macOS
+.DS_Store
+
+# misc
+original-plan.txt
